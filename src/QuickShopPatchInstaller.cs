@@ -34,6 +34,11 @@ internal static class QuickShopPatchInstaller
             AccessTools.Method(typeof(CMS.UI.Windows.ChoosePartUpWindow), nameof(CMS.UI.Windows.ChoosePartUpWindow.Show), new[] { typeof(string), typeof(CMS.UI.Logic.ChoosePartUpWindowType) }),
             prefix: nameof(AutoBuyBeforeChoosePartWindow));
 
+        count += PatchIfFound(
+            harmony,
+            AccessTools.Method(typeof(CMS.UI.Windows.ChoosePartUpWindow), "FillGhostSegment"),
+            prefix: nameof(AutoBuyBeforeGhostSegment));
+
         if (count > 0)
         {
             Plugin.ModLog.LogInfo("QuickShop enabled. Missing mount parts are bought automatically before install.");
@@ -91,7 +96,7 @@ internal static class QuickShopPatchInstaller
     {
         try
         {
-            if (string.IsNullOrWhiteSpace(windowType) || !CanBuyPart(windowType))
+            if (!IsPurchasablePartId(windowType))
             {
                 return;
             }
@@ -107,6 +112,29 @@ internal static class QuickShopPatchInstaller
         catch (Exception ex)
         {
             LogQuickBuyFailure($"QuickShop choose-part auto-buy failed: {ex.GetType().Name}: {ex.Message}");
+        }
+    }
+
+    public static void AutoBuyBeforeGhostSegment(string __0)
+    {
+        try
+        {
+            if (!IsPurchasablePartId(__0))
+            {
+                return;
+            }
+
+            Inventory? inventory = GetInventory();
+            if (inventory == null || inventory.GetItem(__0) != null)
+            {
+                return;
+            }
+
+            TryBuyMissingPart(inventory, __0);
+        }
+        catch (Exception ex)
+        {
+            LogQuickBuyFailure($"QuickShop ghost-segment auto-buy failed: {ex.GetType().Name}: {ex.Message}");
         }
     }
 
@@ -152,7 +180,7 @@ internal static class QuickShopPatchInstaller
             }
 
             string partId = rawPartId!;
-            if (CanBuyPart(partId) && GameInventory.Instance.GetItemPropertyCached(partId) != null)
+            if (IsPurchasablePartId(partId))
             {
                 return partId;
             }
@@ -170,7 +198,7 @@ internal static class QuickShopPatchInstaller
 
         PartProperty partProperty = GameInventory.Instance.GetItemPropertyCached(partId);
         int price = partProperty?.Price ?? -1;
-        if (price < 0 || GlobalData.PlayerMoney < price)
+        if (price <= 0 || GlobalData.PlayerMoney < price)
         {
             return null;
         }
@@ -185,6 +213,23 @@ internal static class QuickShopPatchInstaller
     private static bool CanBuyPart(string partId)
     {
         return GameInventory.CanAddToShopList(partId, true);
+    }
+
+    private static bool IsPurchasablePartId(string? partId)
+    {
+        if (string.IsNullOrWhiteSpace(partId))
+        {
+            return false;
+        }
+
+        string id = partId!;
+        if (!CanBuyPart(id))
+        {
+            return false;
+        }
+
+        PartProperty partProperty = GameInventory.Instance.GetItemPropertyCached(id);
+        return partProperty != null && partProperty.Price > 0;
     }
 
     private static Inventory? GetInventory()
