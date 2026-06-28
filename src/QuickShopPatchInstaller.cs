@@ -1,20 +1,12 @@
 using System;
 using System.Reflection;
 using HarmonyLib;
-using Il2CppInterop.Runtime;
 using UnityEngine;
 
 namespace NoRubberBushingWear;
 
 internal static class QuickShopPatchInstaller
 {
-    private const string PartScriptTypeName = "PartScript";
-    private const string GameInventoryTypeName = "GameInventory";
-    private const string GameManagerTypeName = "GameManager";
-    private const string GlobalDataTypeName = "GlobalData";
-    private const string InventoryTypeName = "Inventory";
-    private const string ItemTypeName = "Item";
-
     private static string? hoveredPartId;
     private static bool loggedQuickBuyFailure;
 
@@ -22,23 +14,19 @@ internal static class QuickShopPatchInstaller
     {
         int count = 0;
 
-        Type? partScriptType = AccessTools.TypeByName(PartScriptTypeName);
-
         count += PatchIfFound(
             harmony,
-            AccessTools.Method(partScriptType, "SetMouseOver", new[] { typeof(bool) }),
+            AccessTools.Method(typeof(PartScript), nameof(PartScript.SetMouseOver), new[] { typeof(bool) }),
             postfix: nameof(TrackHoveredPart));
 
         count += PatchIfFound(
             harmony,
-            AccessTools.Method(partScriptType, "ActionMount", new[] { typeof(bool) }),
+            AccessTools.Method(typeof(PartScript), nameof(PartScript.ActionMount), new[] { typeof(bool) }),
             prefix: nameof(AutoBuyMissingPartBeforeMount));
-
-        Type? inventoryType = AccessTools.TypeByName(InventoryTypeName);
 
         count += PatchIfFound(
             harmony,
-            AccessTools.Method(inventoryType, "GetItems", new[] { typeof(string) }),
+            AccessTools.Method(typeof(Inventory), nameof(Inventory.GetItems), new[] { typeof(string) }),
             postfix: nameof(AutoBuyIntoEmptyItemsList));
 
         if (count > 0)
@@ -47,13 +35,13 @@ internal static class QuickShopPatchInstaller
         }
         else
         {
-            Plugin.ModLog.LogWarning("QuickShop mount hook point was not found.");
+            Plugin.ModLog.LogWarning("QuickShop mount hook points were not found.");
         }
 
         return count;
     }
 
-    public static void TrackHoveredPart(object __instance, bool b)
+    public static void TrackHoveredPart(PartScript __instance, bool b)
     {
         if (!b)
         {
@@ -69,48 +57,24 @@ internal static class QuickShopPatchInstaller
         hoveredPartId = ResolvePurchasablePartId(__instance);
     }
 
-    public static void AutoBuyMissingPartBeforeMount(object __instance)
+    public static void AutoBuyMissingPartBeforeMount(PartScript __instance)
     {
         try
         {
-            object? inventory = GetInventory();
-            if (inventory == null)
-            {
-                LogQuickBuyFailure("QuickShop could not resolve Inventory.");
-                return;
-            }
-
+            Inventory? inventory = GetInventory();
             string? resolvedPartId = ResolvePurchasablePartId(__instance);
-            if (string.IsNullOrWhiteSpace(resolvedPartId))
+            if (inventory == null || string.IsNullOrWhiteSpace(resolvedPartId))
             {
                 return;
             }
 
             string partId = resolvedPartId!;
-            if (InventoryHasPart(inventory, partId))
+            if (inventory.GetItem(partId) != null)
             {
                 return;
             }
 
-            object? partProperty = GetPartProperty(partId);
-            int price = GetIntProperty(partProperty, "Price");
-            if (price < 0 || GetPlayerMoney() < price)
-            {
-                return;
-            }
-
-            object? item = CreateItem(partId);
-            if (item == null)
-            {
-                LogQuickBuyFailure("QuickShop could not create Item.");
-                return;
-            }
-
-            AccessTools.Method(inventory.GetType(), "Add", new[] { item.GetType(), typeof(bool) })
-                ?.Invoke(inventory, new[] { item, true });
-
-            AddPlayerMoney(-price);
-            Plugin.ModLog.LogInfo($"QuickShop bought one missing mount part {partId} for {price}.");
+            TryBuyMissingPart(inventory, partId);
         }
         catch (Exception ex)
         {
@@ -118,7 +82,7 @@ internal static class QuickShopPatchInstaller
         }
     }
 
-    public static void AutoBuyIntoEmptyItemsList(object __instance, string _ID, object? __result)
+    public static void AutoBuyIntoEmptyItemsList(Inventory __instance, string _ID, ref Il2CppSystem.Collections.Generic.List<BaseItem> __result)
     {
         try
         {
@@ -127,19 +91,16 @@ internal static class QuickShopPatchInstaller
                 return;
             }
 
-            if (__result == null || GetListCount(__result) > 0)
+            if (__result == null || __result.Count > 0)
             {
                 return;
             }
 
-            object? item = TryBuyMissingPart(__instance, _ID);
-            if (item == null)
+            Item? item = TryBuyMissingPart(__instance, _ID);
+            if (item != null)
             {
-                return;
+                __result.Add(item);
             }
-
-            AccessTools.Method(__result.GetType(), "Add", new[] { AccessTools.TypeByName("BaseItem") })
-                ?.Invoke(__result, new[] { item });
         }
         catch (Exception ex)
         {
@@ -147,20 +108,23 @@ internal static class QuickShopPatchInstaller
         }
     }
 
-    private static string? ResolvePurchasablePartId(object partScript)
+    private static string? ResolvePurchasablePartId(PartScript partScript)
     {
-        foreach (string methodName in new[] { "GetIDWithTuned", "GetID" })
+        string[] candidates =
         {
-            string? rawPartId = AccessTools.Method(partScript.GetType(), methodName)
-                ?.Invoke(partScript, Array.Empty<object>()) as string;
+            partScript.GetIDWithTuned(),
+            partScript.GetID()
+        };
 
+        foreach (string? rawPartId in candidates)
+        {
             if (string.IsNullOrWhiteSpace(rawPartId))
             {
                 continue;
             }
 
             string partId = rawPartId!;
-            if (CanBuyPart(partId) && GetPartProperty(partId) != null)
+            if (CanBuyPart(partId) && GameInventory.Instance.GetItemPropertyCached(partId) != null)
             {
                 return partId;
             }
@@ -169,110 +133,41 @@ internal static class QuickShopPatchInstaller
         return null;
     }
 
-    private static bool InventoryHasPart(object inventory, string partId)
+    private static Item? TryBuyMissingPart(Inventory inventory, string partId)
     {
-        object? existing = AccessTools.Method(inventory.GetType(), "GetItem", new[] { typeof(string) })
-            ?.Invoke(inventory, new object[] { partId });
-        return existing != null;
-    }
-
-    private static object? TryBuyMissingPart(object inventory, string partId)
-    {
-        if (InventoryHasPart(inventory, partId))
+        if (inventory.GetItem(partId) != null)
         {
             return null;
         }
 
-        object? partProperty = GetPartProperty(partId);
-        int price = GetIntProperty(partProperty, "Price");
-        if (price < 0 || GetPlayerMoney() < price)
+        PartProperty partProperty = GameInventory.Instance.GetItemPropertyCached(partId);
+        int price = partProperty?.Price ?? -1;
+        if (price < 0 || GlobalData.PlayerMoney < price)
         {
             return null;
         }
 
-        object? item = CreateItem(partId);
-        if (item == null)
-        {
-            LogQuickBuyFailure("QuickShop could not create Item.");
-            return null;
-        }
-
-        AccessTools.Method(inventory.GetType(), "Add", new[] { item.GetType(), typeof(bool) })
-            ?.Invoke(inventory, new[] { item, true });
-
-        AddPlayerMoney(-price);
+        Item item = new(partId);
+        inventory.Add(item, true);
+        GlobalData.AddPlayerMoney(-price);
         Plugin.ModLog.LogInfo($"QuickShop bought one missing mount part {partId} for {price}.");
         return item;
     }
 
     private static bool CanBuyPart(string partId)
     {
-        Type? gameInventoryType = AccessTools.TypeByName(GameInventoryTypeName);
-        MethodInfo? canAddToShopList = AccessTools.Method(gameInventoryType, "CanAddToShopList", new[] { typeof(string), typeof(bool) });
-        return canAddToShopList == null || canAddToShopList.Invoke(null, new object[] { partId, true }) is true;
+        return GameInventory.CanAddToShopList(partId, true);
     }
 
-    private static object? GetPartProperty(string partId)
+    private static Inventory? GetInventory()
     {
-        object? gameInventory = AccessTools.PropertyGetter(AccessTools.TypeByName(GameInventoryTypeName), "Instance")
-            ?.Invoke(null, Array.Empty<object>());
-
-        return gameInventory == null
-            ? null
-            : AccessTools.Method(gameInventory.GetType(), "GetItemPropertyCached", new[] { typeof(string) })
-                ?.Invoke(gameInventory, new object[] { partId });
-    }
-
-    private static object? GetInventory()
-    {
-        Type? gameManagerType = AccessTools.TypeByName(GameManagerTypeName);
-        UnityEngine.Object? gameManager = gameManagerType == null ? null : UnityEngine.Object.FindObjectOfType(Il2CppType.From(gameManagerType));
-        object? inventory = gameManager == null
-            ? null
-            : AccessTools.PropertyGetter(gameManagerType, "Inventory")?.Invoke(gameManager, Array.Empty<object>());
-
-        if (inventory != null)
+        GameManager? gameManager = UnityEngine.Object.FindObjectOfType<GameManager>();
+        if (gameManager?.Inventory != null)
         {
-            return inventory;
+            return gameManager.Inventory;
         }
 
-        Type? inventoryType = AccessTools.TypeByName(InventoryTypeName);
-        return inventoryType == null ? null : UnityEngine.Object.FindObjectOfType(Il2CppType.From(inventoryType));
-    }
-
-    private static object? CreateItem(string partId)
-    {
-        Type? itemType = AccessTools.TypeByName(ItemTypeName);
-        return itemType == null ? null : Activator.CreateInstance(itemType, partId);
-    }
-
-    private static int GetPlayerMoney()
-    {
-        return AccessTools.PropertyGetter(AccessTools.TypeByName(GlobalDataTypeName), "PlayerMoney")
-            ?.Invoke(null, Array.Empty<object>()) as int? ?? 0;
-    }
-
-    private static void AddPlayerMoney(int amount)
-    {
-        AccessTools.Method(AccessTools.TypeByName(GlobalDataTypeName), "AddPlayerMoney", new[] { typeof(int) })
-            ?.Invoke(null, new object[] { amount });
-    }
-
-    private static int GetIntProperty(object? instance, string propertyName)
-    {
-        if (instance == null)
-        {
-            return -1;
-        }
-
-        object? value = AccessTools.PropertyGetter(instance.GetType(), propertyName)?.Invoke(instance, Array.Empty<object>());
-        return value is int result ? result : -1;
-    }
-
-    private static int GetListCount(object list)
-    {
-        object? count = AccessTools.PropertyGetter(list.GetType(), "Count")?.Invoke(list, Array.Empty<object>());
-        return count is int result ? result : 0;
+        return UnityEngine.Object.FindObjectOfType<Inventory>();
     }
 
     private static int PatchIfFound(Harmony harmony, MethodBase? target, string? prefix = null, string? postfix = null)
