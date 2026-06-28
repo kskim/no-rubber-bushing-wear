@@ -8,6 +8,8 @@ namespace NoRubberBushingWear;
 internal static class QuickShopPatchInstaller
 {
     private static string? hoveredPartId;
+    private static int mountLookupDepth;
+    private static bool isBuyingPart;
     private static bool loggedQuickBuyFailure;
 
     public static int Install(Harmony harmony)
@@ -22,7 +24,13 @@ internal static class QuickShopPatchInstaller
         count += PatchIfFound(
             harmony,
             AccessTools.Method(typeof(PartScript), nameof(PartScript.ActionMount), new[] { typeof(bool) }),
-            prefix: nameof(AutoBuyMissingPartBeforeMount));
+            prefix: nameof(BeginMountLookup),
+            postfix: nameof(EndMountLookup));
+
+        count += PatchIfFound(
+            harmony,
+            AccessTools.Method(typeof(Inventory), nameof(Inventory.GetItem), new[] { typeof(string) }),
+            postfix: nameof(AutoBuyIntoMissingItemLookup));
 
         count += PatchIfFound(
             harmony,
@@ -57,8 +65,10 @@ internal static class QuickShopPatchInstaller
         hoveredPartId = ResolvePurchasablePartId(__instance);
     }
 
-    public static void AutoBuyMissingPartBeforeMount(PartScript __instance)
+    public static void BeginMountLookup(PartScript __instance)
     {
+        mountLookupDepth++;
+
         try
         {
             Inventory? inventory = GetInventory();
@@ -82,11 +92,37 @@ internal static class QuickShopPatchInstaller
         }
     }
 
+    public static void EndMountLookup()
+    {
+        mountLookupDepth = Math.Max(0, mountLookupDepth - 1);
+    }
+
+    public static void AutoBuyIntoMissingItemLookup(Inventory __instance, string _ID, ref Item __result)
+    {
+        try
+        {
+            if (__result != null || !ShouldAutoBuyLookup(_ID))
+            {
+                return;
+            }
+
+            Item? item = TryBuyMissingPart(__instance, _ID);
+            if (item != null)
+            {
+                __result = item;
+            }
+        }
+        catch (Exception ex)
+        {
+            LogQuickBuyFailure($"QuickShop item lookup auto-buy failed: {ex.GetType().Name}: {ex.Message}");
+        }
+    }
+
     public static void AutoBuyIntoEmptyItemsList(Inventory __instance, string _ID, ref Il2CppSystem.Collections.Generic.List<BaseItem> __result)
     {
         try
         {
-            if (string.IsNullOrWhiteSpace(_ID) || !string.Equals(_ID, hoveredPartId, StringComparison.Ordinal))
+            if (!ShouldAutoBuyLookup(_ID))
             {
                 return;
             }
@@ -135,7 +171,7 @@ internal static class QuickShopPatchInstaller
 
     private static Item? TryBuyMissingPart(Inventory inventory, string partId)
     {
-        if (inventory.GetItem(partId) != null)
+        if (isBuyingPart || inventory.GetItem(partId) != null)
         {
             return null;
         }
@@ -147,16 +183,40 @@ internal static class QuickShopPatchInstaller
             return null;
         }
 
-        Item item = new(partId);
-        inventory.Add(item, true);
-        GlobalData.AddPlayerMoney(-price);
-        Plugin.ModLog.LogInfo($"QuickShop bought one missing mount part {partId} for {price}.");
-        return item;
+        try
+        {
+            isBuyingPart = true;
+            Item item = new(partId);
+            inventory.Add(item, true);
+            GlobalData.AddPlayerMoney(-price);
+            Plugin.ModLog.LogInfo($"QuickShop bought one missing mount part {partId} for {price}.");
+            return item;
+        }
+        finally
+        {
+            isBuyingPart = false;
+        }
     }
 
     private static bool CanBuyPart(string partId)
     {
         return GameInventory.CanAddToShopList(partId, true);
+    }
+
+    private static bool ShouldAutoBuyLookup(string partId)
+    {
+        if (isBuyingPart || string.IsNullOrWhiteSpace(partId))
+        {
+            return false;
+        }
+
+        bool isCurrentHoveredPart = string.Equals(partId, hoveredPartId, StringComparison.Ordinal);
+        if (!isCurrentHoveredPart && mountLookupDepth <= 0)
+        {
+            return false;
+        }
+
+        return CanBuyPart(partId) && GameInventory.Instance.GetItemPropertyCached(partId) != null;
     }
 
     private static Inventory? GetInventory()

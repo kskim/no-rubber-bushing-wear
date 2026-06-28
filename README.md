@@ -49,7 +49,7 @@ For QuickShop, the plugin patches:
 - `PartScript.SetMouseOver(bool)`
 - `Inventory.GetItems(string)`
 
-When mounting starts, the patch checks whether the required part exists in the vanilla inventory. It also watches the inventory item lookup used to build the install candidate list; if the list for the hovered part is empty and the player has enough money, it adds a new vanilla `Item` and subtracts the vanilla price before the original mount flow continues.
+When mounting starts, the patch checks whether the required part exists in the vanilla inventory. It also watches item lookups during that mount flow, so additional required parts in a combined install can be bought the same way before the original mount flow continues.
 
 ## Requirements
 

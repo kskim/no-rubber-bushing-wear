@@ -55,7 +55,7 @@ Relevant symbols:
 - `GlobalData.PlayerMoney`
 - `GlobalData.AddPlayerMoney`
 
-When `ActionMount(bool)` starts, the QuickShop patch checks whether the required part already exists in `Inventory`. It also tracks the hovered `PartScript` and patches `Inventory.GetItems(string)` so an empty candidate list for that hovered part can be populated with one newly bought vanilla `Item`. If missing and affordable, it adds the item to `Inventory` and subtracts the vanilla price before the original mount flow continues.
+When `ActionMount(bool)` starts, the QuickShop patch checks whether the required part already exists in `Inventory`. It also tracks mount lookup depth and patches `Inventory.GetItem(string)` / `Inventory.GetItems(string)` so empty lookups during the active mount flow can be populated with one newly bought vanilla `Item`. If missing and affordable, it adds the item to `Inventory` and subtracts the vanilla price before the original mount flow continues.
 
 ## Installed Tooling
 
