@@ -115,5 +115,5 @@ Research notes are kept in [docs/research.md](docs/research.md).
 The currently tested local setup used:
 
 - CMS 2021 Steam install
-- BepInEx Unity.IL2CPP win-x64 `6.0.0-be.784`
+- BepInEx Unity.IL2CPP win-x64 `6.0.0-be.783`
 - .NET SDK `9.0.315`

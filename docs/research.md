@@ -39,13 +39,14 @@ The implementation therefore patches condition/fault/damage candidates in `Assem
 
 ## Installed Tooling
 
-- Installed BepInEx IL2CPP: `BepInEx-Unity.IL2CPP-win-x64-6.0.0-be.784+0523d6f`
+- Installed BepInEx IL2CPP: `BepInEx-Unity.IL2CPP-win-x64-6.0.0-be.783+c58c42d`
 - Confirmed core files:
   - `BepInEx.Core.dll`
   - `BepInEx.Unity.IL2CPP.dll`
   - `Il2CppInterop.Runtime.dll`
   - `0Harmony.dll`
 - The previous Mono-style BepInEx install was moved to a timestamped `_bepinex_mono_backup_*` folder in the game root.
+- `6.0.0-be.784+0523d6f` was tried first, but failed during IL2CPP interop generation with an `AsmResolver.DotNet.ModuleDefinition` `MissingMethodException`, so it was replaced with `6.0.0-be.783+c58c42d`.
 - The mod builds cleanly with .NET SDK 9.0 and has been copied to `BepInEx\plugins\NoRubberBushingWear.dll`.
 
 ## Remaining Runtime Validation

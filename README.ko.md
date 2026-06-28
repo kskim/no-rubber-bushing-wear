@@ -115,5 +115,5 @@ No Rubber Bushing Wear loaded
 현재 로컬에서 확인한 환경:
 
 - CMS 2021 Steam 설치본
-- BepInEx Unity.IL2CPP win-x64 `6.0.0-be.784`
+- BepInEx Unity.IL2CPP win-x64 `6.0.0-be.783`
 - .NET SDK `9.0.315`
