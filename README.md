@@ -48,8 +48,9 @@ For QuickShop, the plugin patches:
 - `PartScript.ActionMount(bool)`
 - `PartScript.SetMouseOver(bool)`
 - `Inventory.GetItems(string)`
+- `CMS.UI.Windows.ChoosePartUpWindow.Show(string, ChoosePartUpWindowType)`
 
-When mounting starts, the patch checks whether the required part exists in the vanilla inventory. It also watches item lookups during that mount flow, so additional required parts in a combined install can be bought the same way before the original mount flow continues.
+When mounting starts or the part selection window is about to open, the patch checks whether the required part exists in the vanilla inventory. It also watches item lookups during that mount flow, so additional required parts in a combined install can be bought before the original mount flow continues.
 
 ## Requirements
 

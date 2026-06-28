@@ -48,8 +48,9 @@ QuickShop 기능은 아래 UI 메서드를 패치합니다.
 - `PartScript.ActionMount(bool)`
 - `PartScript.SetMouseOver(bool)`
 - `Inventory.GetItems(string)`
+- `CMS.UI.Windows.ChoosePartUpWindow.Show(string, ChoosePartUpWindowType)`
 
-장착이 시작되면 패치가 필요한 부품이 vanilla 인벤토리에 있는지 확인합니다. 또한 해당 장착 흐름 중 발생하는 인벤토리 조회를 감시해서, 복합 장착에 필요한 추가 부품도 같은 방식으로 자동 구매한 뒤 원래 장착 흐름이 계속 실행되게 합니다.
+장착이 시작되거나 부품 선택 창이 열리기 직전에 필요한 부품이 vanilla 인벤토리에 있는지 확인합니다. 또한 해당 장착 흐름 중 발생하는 인벤토리 조회를 감시해서, 복합 장착에 필요한 추가 부품도 자동 구매한 뒤 원래 장착 흐름이 계속 실행되게 합니다.
 
 ## 요구 사항
 
