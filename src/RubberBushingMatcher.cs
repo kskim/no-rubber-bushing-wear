@@ -90,19 +90,6 @@ internal static class RubberBushingMatcher
 
         const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
 
-        foreach (PropertyInfo property in type.GetProperties(flags))
-        {
-            if (!property.CanRead || property.GetIndexParameters().Length != 0 || !IsLikelyIdentityMember(property.Name))
-            {
-                continue;
-            }
-
-            if (TryRead(property, value, out object? memberValue) && IsRubberBushing(memberValue, visited, depth + 1))
-            {
-                return true;
-            }
-        }
-
         foreach (FieldInfo field in type.GetFields(flags))
         {
             if (!IsLikelyIdentityMember(field.Name))
@@ -146,20 +133,6 @@ internal static class RubberBushingMatcher
             .Replace("_", " ")
             .Replace("-", " ")
             .ToLowerInvariant();
-    }
-
-    private static bool TryRead(PropertyInfo property, object instance, out object? value)
-    {
-        try
-        {
-            value = property.GetValue(instance);
-            return true;
-        }
-        catch
-        {
-            value = null;
-            return false;
-        }
     }
 
     private static bool TryRead(FieldInfo field, object instance, out object? value)

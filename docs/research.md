@@ -50,6 +50,7 @@ The implementation therefore patches condition/fault/damage candidates in `Assem
 - `6.0.0-be.783+c58c42d` generated interop assemblies successfully, but failed before plugin loading during IL2CPP chainloader setup with `System.InvalidOperationException: Sequence contains no elements`, so it was replaced with `6.0.0-be.752+dd0655f`.
 - The mod builds cleanly with .NET SDK 9.0 and has been copied to `BepInEx\plugins\NoRubberBushingWear.dll`.
 - `UnityLogListening = false` is required in `BepInEx\config\BepInEx.cfg` on this install because the chainloader fails while registering the Unity log callback.
+- An early runtime scanner patched too broadly and caused a stack overflow in `BaseItem.GetConditionToShow`. The active implementation only patches safe `PartData`/`BodyPartData` condition accessors and does not invoke property getters while identifying parts.
 
 ## Remaining Runtime Validation
 

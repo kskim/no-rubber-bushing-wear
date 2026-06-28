@@ -110,11 +110,13 @@ internal static class RuntimePatchInstaller
             return false;
         }
 
+        if (!IsSafeConditionType(method.DeclaringType))
+        {
+            return false;
+        }
+
         string name = NormalizeName(method.Name);
-        return name.Contains("condition")
-            || name.Contains("quality")
-            || name.Contains("durability")
-            || name.Contains("wear");
+        return name == "getcondition" || name == "get_condition";
     }
 
     private static bool LooksLikeFaultRead(MethodBase method)
@@ -124,13 +126,15 @@ internal static class RuntimePatchInstaller
             return false;
         }
 
+        if (!IsSafeConditionType(method.DeclaringType))
+        {
+            return false;
+        }
+
         string name = NormalizeName(method.Name);
         return name.Contains("fault")
             || name.Contains("broken")
-            || name.Contains("damage")
-            || name.Contains("diagnostic")
-            || name.Contains("repair")
-            || name.Contains("complete");
+            || name.Contains("diagnostic");
     }
 
     private static bool LooksLikeDamageWrite(MethodBase method)
@@ -140,11 +144,33 @@ internal static class RuntimePatchInstaller
             return false;
         }
 
+        if (!IsSafeConditionType(method.DeclaringType))
+        {
+            return false;
+        }
+
         string name = NormalizeName(method.Name);
-        return name.Contains("damage")
-            || name.Contains("wear")
-            || name.Contains("condition")
-            || name.Contains("durability");
+        return name == "setcondition" || name == "set_condition";
+    }
+
+    private static bool IsSafeConditionType(Type? type)
+    {
+        if (type == null)
+        {
+            return false;
+        }
+
+        string name = type.FullName ?? type.Name;
+
+        if (name.Contains("+"))
+        {
+            return false;
+        }
+
+        return name.Equals("PartData", StringComparison.Ordinal)
+            || name.EndsWith(".PartData", StringComparison.Ordinal)
+            || name.Equals("BodyPartData", StringComparison.Ordinal)
+            || name.EndsWith(".BodyPartData", StringComparison.Ordinal);
     }
 
     private static HarmonyMethod? CreatePrefix(MethodBase method)
