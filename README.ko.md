@@ -49,6 +49,8 @@ BepInEx\core\BepInEx.Unity.IL2CPP.dll
 BepInEx\core\Il2CppInterop.Runtime.dll
 ```
 
+CMS 2021에서 IL2CPP chainloader가 Unity logging 설정 중 실패한다면 `BepInEx\config\BepInEx.cfg`의 `UnityLogListening = false`를 사용합니다.
+
 ## 빌드
 
 프로젝트 기본 경로에 게임이 설치되어 있다면:
@@ -116,4 +118,5 @@ No Rubber Bushing Wear loaded
 
 - CMS 2021 Steam 설치본
 - BepInEx Unity.IL2CPP win-x64 `6.0.0-be.752`
+- `UnityLogListening = false`
 - .NET SDK `9.0.315`

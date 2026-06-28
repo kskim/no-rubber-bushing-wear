@@ -49,6 +49,8 @@ BepInEx\core\BepInEx.Unity.IL2CPP.dll
 BepInEx\core\Il2CppInterop.Runtime.dll
 ```
 
+For CMS 2021, set `UnityLogListening = false` in `BepInEx\config\BepInEx.cfg` if the IL2CPP chainloader fails while setting up Unity logging.
+
 ## Build
 
 If the game is installed at the default path used by this project:
@@ -116,4 +118,5 @@ The currently tested local setup used:
 
 - CMS 2021 Steam install
 - BepInEx Unity.IL2CPP win-x64 `6.0.0-be.752`
+- `UnityLogListening = false`
 - .NET SDK `9.0.315`

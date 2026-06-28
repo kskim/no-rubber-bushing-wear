@@ -49,6 +49,7 @@ The implementation therefore patches condition/fault/damage candidates in `Assem
 - `6.0.0-be.784+0523d6f` was tried first, but failed during IL2CPP interop generation with an `AsmResolver.DotNet.ModuleDefinition` `MissingMethodException`, so it was replaced with `6.0.0-be.783+c58c42d`.
 - `6.0.0-be.783+c58c42d` generated interop assemblies successfully, but failed before plugin loading during IL2CPP chainloader setup with `System.InvalidOperationException: Sequence contains no elements`, so it was replaced with `6.0.0-be.752+dd0655f`.
 - The mod builds cleanly with .NET SDK 9.0 and has been copied to `BepInEx\plugins\NoRubberBushingWear.dll`.
+- `UnityLogListening = false` is required in `BepInEx\config\BepInEx.cfg` on this install because the chainloader fails while registering the Unity log callback.
 
 ## Remaining Runtime Validation
 
