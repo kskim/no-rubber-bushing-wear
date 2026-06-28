@@ -16,7 +16,7 @@ public sealed class Plugin : BaseUnityPlugin
 {
     public const string PluginGuid = "com.local.norubberbushingwear";
     public const string PluginName = "No Rubber Bushing Wear";
-    public const string PluginVersion = "1.0.0";
+    public const string PluginVersion = "1.1.0";
 
     private Harmony? harmony;
 
@@ -41,6 +41,7 @@ public sealed class Plugin : BaseUnityPlugin
         harmony = new Harmony(PluginGuid);
 
         int patched = RuntimePatchInstaller.Install(harmony);
+        patched += QuickShopPatchInstaller.Install(harmony);
         ModLog.LogInfo($"{PluginName} loaded. Harmony patch points applied: {patched}.");
 
         if (patched == 0)

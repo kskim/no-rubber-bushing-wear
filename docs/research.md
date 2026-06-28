@@ -37,6 +37,23 @@ The mod treats both localization keys as Rubber Bushing parts.
 
 The implementation therefore patches condition/fault/damage candidates in `Assembly-CSharp` at runtime and only changes results when the instance or arguments identify `tuleja_1`, `tulejaMala_1`, `Rubber Bushing`, or `Small Rubber Bushing`.
 
+## QuickShop Hook Points
+
+The generated IL2CPP interop metadata exposes the parts shop UI in `Assembly-CSharp-firstpass.dll`.
+
+Relevant symbols:
+
+- `CMS.UI.Logic.Shop.ShopItem.OnPointerEnter`
+- `CMS.UI.Logic.Shop.ShopItem.OnPointerExit`
+- `CMS.UI.Logic.Shop.ShopItem.Deselect`
+- `CMS.UI.Logic.Shop.PartsShopPage.Close`
+- `CMS.UI.Logic.Shop.PartsShopPage.HandleInput`
+- `CMS.UI.Logic.Shop.PartsShopPage.SubmitItem`
+- `CMS.UI.Windows.ShopBuyWindow.PrepareForItem`
+- `CMS.UI.Windows.ShopBuyWindow.BuyItem`
+
+The QuickShop patch remembers the hovered `ShopItem`, detects `B` while `PartsShopPage.HandleInput` is active, submits that item through the vanilla shop page, then buys the item through the vanilla `ShopBuyWindow` path after `PrepareForItem`.
+
 ## Installed Tooling
 
 - Installed BepInEx IL2CPP: `BepInEx-Unity.IL2CPP-win-x64-6.0.0-be.752+dd0655f`
@@ -52,10 +69,15 @@ The implementation therefore patches condition/fault/damage candidates in `Assem
 - `UnityLogListening = false` is required in `BepInEx\config\BepInEx.cfg` on this install because the chainloader fails while registering the Unity log callback.
 - An early runtime scanner patched too broadly and caused a stack overflow in `BaseItem.GetConditionToShow`. The active implementation only patches safe `PartData`/`BodyPartData` condition accessors and does not invoke property getters while identifying parts.
 
-## Remaining Runtime Validation
+## Runtime Validation
 
-Launch the game once so BepInEx can generate IL2CPP interop assemblies and load the plugin. Then check `BepInEx\LogOutput.log` for:
+The game has been launched successfully with BepInEx Unity.IL2CPP `6.0.0-be.752` and the narrowed rubber bushing patches.
+
+After adding QuickShop, launch the game again and check `BepInEx\LogOutput.log` for:
 
 ```text
-No Rubber Bushing Wear loaded.
+No Rubber Bushing Wear 1.1.0
+QuickShop enabled
 ```
+
+Manual QuickShop validation still needs an in-game parts shop check: hover a part in the parts shop and press `B`; one item should be purchased through the vanilla purchase flow.
