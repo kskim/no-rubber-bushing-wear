@@ -1,0 +1,10 @@
+bin/
+obj/
+*.user
+*.suo
+*.tmp
+*.log
+
+# Local game/runtime artifacts
+_bepinex_mono_backup_*/
+BepInEx/

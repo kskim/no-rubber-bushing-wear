@@ -1,0 +1,58 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net472</TargetFramework>
+    <AssemblyName>NoRubberBushingWear</AssemblyName>
+    <RootNamespace>NoRubberBushingWear</RootNamespace>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>false</ImplicitUsings>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <GameRoot Condition="'$(GameRoot)' == ''">D:\SteamLibrary\steamapps\common\Car Mechanic Simulator 2021</GameRoot>
+    <GameManaged>$(GameRoot)\Car Mechanic Simulator 2021_Data\Managed</GameManaged>
+    <BepInExCore>$(GameRoot)\BepInEx\core</BepInExCore>
+    <Il2CppBepInEx>$(BepInExCore)\BepInEx.Unity.IL2CPP.dll</Il2CppBepInEx>
+    <DefineConstants Condition="Exists('$(Il2CppBepInEx)')">$(DefineConstants);BEPINEX_IL2CPP</DefineConstants>
+  </PropertyGroup>
+
+  <Target Name="ValidateGameReferences" BeforeTargets="ResolveReferences">
+    <Error Condition="!Exists('$(GameRoot)\GameAssembly.dll') And !Exists('$(GameManaged)\Assembly-CSharp.dll')" Text="CMS 2021 game files were not found. Build with -p:GameRoot=&quot;path\to\Car Mechanic Simulator 2021&quot;." />
+    <Error Condition="!Exists('$(BepInExCore)\BepInEx.dll') And !Exists('$(BepInExCore)\BepInEx.Core.dll')" Text="BepInEx core DLL was not found. Install BepInEx into the CMS 2021 game root." />
+    <Error Condition="!Exists('$(BepInExCore)\0Harmony.dll')" Text="0Harmony.dll was not found. Install BepInEx into the CMS 2021 game root." />
+    <Error Condition="Exists('$(GameRoot)\GameAssembly.dll') And !Exists('$(Il2CppBepInEx)')" Text="This CMS 2021 install is IL2CPP. Install an IL2CPP-capable BepInEx build that provides BepInEx.Unity.IL2CPP.dll. The Mono BepInEx package is not sufficient." />
+    <Error Condition="!Exists('$(Il2CppBepInEx)') And !Exists('$(GameManaged)\UnityEngine.CoreModule.dll')" Text="UnityEngine.CoreModule.dll was not found. For Mono builds, make sure Managed assemblies exist." />
+  </Target>
+
+  <ItemGroup>
+    <Reference Include="BepInEx">
+      <HintPath Condition="Exists('$(BepInExCore)\BepInEx.dll')">$(BepInExCore)\BepInEx.dll</HintPath>
+      <HintPath Condition="!Exists('$(BepInExCore)\BepInEx.dll')">$(BepInExCore)\BepInEx.Core.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="0Harmony">
+      <HintPath>$(BepInExCore)\0Harmony.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup Condition="Exists('$(Il2CppBepInEx)')">
+    <Reference Include="BepInEx.Unity.IL2CPP">
+      <HintPath>$(Il2CppBepInEx)</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Il2CppInterop.Runtime" Condition="Exists('$(BepInExCore)\Il2CppInterop.Runtime.dll')">
+      <HintPath>$(BepInExCore)\Il2CppInterop.Runtime.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup Condition="!Exists('$(Il2CppBepInEx)')">
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>$(GameManaged)\UnityEngine.CoreModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Assembly-CSharp">
+      <HintPath>$(GameManaged)\Assembly-CSharp.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+</Project>
