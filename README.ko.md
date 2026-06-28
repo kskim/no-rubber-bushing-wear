@@ -46,8 +46,10 @@ Rubber Bushing 기능은 생성된 interop metadata의 `PartData`, `BodyPartData
 QuickShop 기능은 아래 UI 메서드를 패치합니다.
 
 - `PartScript.ActionMount(bool)`
+- `PartScript.SetMouseOver(bool)`
+- `Inventory.GetItems(string)`
 
-장착이 시작되면 패치가 필요한 부품이 vanilla 인벤토리에 있는지 확인하고, 없고 돈이 충분하면 새 vanilla `Item`을 추가한 뒤 부품 가격만큼 돈을 차감합니다. 그 다음 원래 장착 로직이 계속 실행됩니다.
+장착이 시작되면 패치가 필요한 부품이 vanilla 인벤토리에 있는지 확인합니다. 또한 설치 후보 목록을 만들 때 사용하는 인벤토리 조회를 감시해서, 마우스가 올라간 부품의 후보 목록이 비어 있고 돈이 충분하면 새 vanilla `Item`을 추가한 뒤 부품 가격만큼 돈을 차감합니다. 그 다음 원래 장착 흐름이 계속 실행됩니다.
 
 ## 요구 사항
 

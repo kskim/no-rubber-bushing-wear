@@ -46,14 +46,16 @@ Relevant symbols:
 - `PartScript.GetIDWithTuned`
 - `PartScript.GetID`
 - `PartScript.ActionMount(bool)`
+- `PartScript.SetMouseOver(bool)`
 - `GameInventory.Instance`
 - `GameInventory.GetItemPropertyCached`
 - `PartProperty.Price`
+- `Inventory.GetItems(string)`
 - `Inventory.Add(Item, bool)`
 - `GlobalData.PlayerMoney`
 - `GlobalData.AddPlayerMoney`
 
-When `ActionMount(bool)` starts, the QuickShop patch checks whether the required part already exists in `Inventory`. If missing and affordable, it creates a vanilla `Item`, adds it to `Inventory`, and subtracts the vanilla price before the original mount logic continues.
+When `ActionMount(bool)` starts, the QuickShop patch checks whether the required part already exists in `Inventory`. It also tracks the hovered `PartScript` and patches `Inventory.GetItems(string)` so an empty candidate list for that hovered part can be populated with one newly bought vanilla `Item`. If missing and affordable, it adds the item to `Inventory` and subtracts the vanilla price before the original mount flow continues.
 
 ## Installed Tooling
 

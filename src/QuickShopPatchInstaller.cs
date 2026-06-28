@@ -15,6 +15,7 @@ internal static class QuickShopPatchInstaller
     private const string InventoryTypeName = "Inventory";
     private const string ItemTypeName = "Item";
 
+    private static string? hoveredPartId;
     private static bool loggedQuickBuyFailure;
 
     public static int Install(Harmony harmony)
@@ -25,8 +26,20 @@ internal static class QuickShopPatchInstaller
 
         count += PatchIfFound(
             harmony,
+            AccessTools.Method(partScriptType, "SetMouseOver", new[] { typeof(bool) }),
+            postfix: nameof(TrackHoveredPart));
+
+        count += PatchIfFound(
+            harmony,
             AccessTools.Method(partScriptType, "ActionMount", new[] { typeof(bool) }),
             prefix: nameof(AutoBuyMissingPartBeforeMount));
+
+        Type? inventoryType = AccessTools.TypeByName(InventoryTypeName);
+
+        count += PatchIfFound(
+            harmony,
+            AccessTools.Method(inventoryType, "GetItems", new[] { typeof(string) }),
+            postfix: nameof(AutoBuyIntoEmptyItemsList));
 
         if (count > 0)
         {
@@ -38,6 +51,22 @@ internal static class QuickShopPatchInstaller
         }
 
         return count;
+    }
+
+    public static void TrackHoveredPart(object __instance, bool b)
+    {
+        if (!b)
+        {
+            string? exitingPartId = ResolvePurchasablePartId(__instance);
+            if (!string.IsNullOrWhiteSpace(exitingPartId) && string.Equals(hoveredPartId, exitingPartId, StringComparison.Ordinal))
+            {
+                hoveredPartId = null;
+            }
+
+            return;
+        }
+
+        hoveredPartId = ResolvePurchasablePartId(__instance);
     }
 
     public static void AutoBuyMissingPartBeforeMount(object __instance)
@@ -89,6 +118,35 @@ internal static class QuickShopPatchInstaller
         }
     }
 
+    public static void AutoBuyIntoEmptyItemsList(object __instance, string _ID, object? __result)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(_ID) || !string.Equals(_ID, hoveredPartId, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            if (__result == null || GetListCount(__result) > 0)
+            {
+                return;
+            }
+
+            object? item = TryBuyMissingPart(__instance, _ID);
+            if (item == null)
+            {
+                return;
+            }
+
+            AccessTools.Method(__result.GetType(), "Add", new[] { AccessTools.TypeByName("BaseItem") })
+                ?.Invoke(__result, new[] { item });
+        }
+        catch (Exception ex)
+        {
+            LogQuickBuyFailure($"QuickShop inventory-list auto-buy failed: {ex.GetType().Name}: {ex.Message}");
+        }
+    }
+
     private static string? ResolvePurchasablePartId(object partScript)
     {
         foreach (string methodName in new[] { "GetIDWithTuned", "GetID" })
@@ -116,6 +174,35 @@ internal static class QuickShopPatchInstaller
         object? existing = AccessTools.Method(inventory.GetType(), "GetItem", new[] { typeof(string) })
             ?.Invoke(inventory, new object[] { partId });
         return existing != null;
+    }
+
+    private static object? TryBuyMissingPart(object inventory, string partId)
+    {
+        if (InventoryHasPart(inventory, partId))
+        {
+            return null;
+        }
+
+        object? partProperty = GetPartProperty(partId);
+        int price = GetIntProperty(partProperty, "Price");
+        if (price < 0 || GetPlayerMoney() < price)
+        {
+            return null;
+        }
+
+        object? item = CreateItem(partId);
+        if (item == null)
+        {
+            LogQuickBuyFailure("QuickShop could not create Item.");
+            return null;
+        }
+
+        AccessTools.Method(inventory.GetType(), "Add", new[] { item.GetType(), typeof(bool) })
+            ?.Invoke(inventory, new[] { item, true });
+
+        AddPlayerMoney(-price);
+        Plugin.ModLog.LogInfo($"QuickShop bought one missing mount part {partId} for {price}.");
+        return item;
     }
 
     private static bool CanBuyPart(string partId)
@@ -180,6 +267,12 @@ internal static class QuickShopPatchInstaller
 
         object? value = AccessTools.PropertyGetter(instance.GetType(), propertyName)?.Invoke(instance, Array.Empty<object>());
         return value is int result ? result : -1;
+    }
+
+    private static int GetListCount(object list)
+    {
+        object? count = AccessTools.PropertyGetter(list.GetType(), "Count")?.Invoke(list, Array.Empty<object>());
+        return count is int result ? result : 0;
     }
 
     private static int PatchIfFound(Harmony harmony, MethodBase? target, string? prefix = null, string? postfix = null)
