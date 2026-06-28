@@ -43,10 +43,9 @@ The generated IL2CPP interop metadata exposes repair-screen part hover through `
 
 Relevant symbols:
 
-- `PartScript.SetMouseOver(bool)`
 - `PartScript.GetIDWithTuned`
 - `PartScript.GetID`
-- `PartScript.Update`
+- `PartScript.ActionMount(bool)`
 - `GameInventory.Instance`
 - `GameInventory.GetItemPropertyCached`
 - `PartProperty.Price`
@@ -54,7 +53,7 @@ Relevant symbols:
 - `GlobalData.PlayerMoney`
 - `GlobalData.AddPlayerMoney`
 
-The QuickShop patch remembers the hovered `PartScript`, detects `B` during part updates, checks the vanilla part price and player money, creates a vanilla `Item`, adds it to `Inventory`, and subtracts the vanilla price.
+When `ActionMount(bool)` starts, the QuickShop patch checks whether the required part already exists in `Inventory`. If missing and affordable, it creates a vanilla `Item`, adds it to `Inventory`, and subtracts the vanilla price before the original mount logic continues.
 
 ## Installed Tooling
 
@@ -82,4 +81,4 @@ No Rubber Bushing Wear 1.1.0
 QuickShop enabled
 ```
 
-Manual QuickShop validation still needs an in-game repair-screen check: hover a vehicle part and press `B`; one replacement item should be purchased and added to inventory while money decreases by the vanilla price.
+Manual QuickShop validation still needs an in-game repair-screen check: try to install a part that is missing from inventory; one replacement item should be purchased automatically, money should decrease by the vanilla price, and the install attempt should continue.

@@ -15,8 +15,6 @@ internal static class QuickShopPatchInstaller
     private const string InventoryTypeName = "Inventory";
     private const string ItemTypeName = "Item";
 
-    private static object? hoveredPartScript;
-    private static int lastHandledFrame = -1;
     private static bool loggedQuickBuyFailure;
 
     public static int Install(Harmony harmony)
@@ -27,79 +25,40 @@ internal static class QuickShopPatchInstaller
 
         count += PatchIfFound(
             harmony,
-            AccessTools.Method(partScriptType, "SetMouseOver", new[] { typeof(bool) }),
-            postfix: nameof(TrackHoveredPart));
-
-        count += PatchIfFound(
-            harmony,
-            AccessTools.Method(partScriptType, "OnDisable"),
-            postfix: nameof(ClearHoveredPart));
-
-        count += PatchIfFound(
-            harmony,
-            AccessTools.Method(partScriptType, "OnDestroy"),
-            postfix: nameof(ClearHoveredPart));
-
-        count += PatchIfFound(
-            harmony,
-            AccessTools.Method(partScriptType, "Update"),
-            postfix: nameof(HandleRepairQuickShopInput));
+            AccessTools.Method(partScriptType, "ActionMount", new[] { typeof(bool) }),
+            prefix: nameof(AutoBuyMissingPartBeforeMount));
 
         if (count > 0)
         {
-            Plugin.ModLog.LogInfo("QuickShop enabled. Press B while hovering a repair-screen part to buy one replacement.");
+            Plugin.ModLog.LogInfo("QuickShop enabled. Missing mount parts are bought automatically before install.");
         }
         else
         {
-            Plugin.ModLog.LogWarning("QuickShop repair-screen hook points were not found.");
+            Plugin.ModLog.LogWarning("QuickShop mount hook point was not found.");
         }
 
         return count;
     }
 
-    public static void TrackHoveredPart(object __instance, bool b)
-    {
-        if (b)
-        {
-            hoveredPartScript = __instance;
-        }
-        else if (ReferenceEquals(hoveredPartScript, __instance))
-        {
-            hoveredPartScript = null;
-        }
-    }
-
-    public static void ClearHoveredPart(object __instance)
-    {
-        if (ReferenceEquals(hoveredPartScript, __instance))
-        {
-            hoveredPartScript = null;
-        }
-    }
-
-    public static void HandleRepairQuickShopInput()
-    {
-        if (hoveredPartScript == null || !Input.GetKeyDown(KeyCode.B) || lastHandledFrame == Time.frameCount)
-        {
-            return;
-        }
-
-        lastHandledFrame = Time.frameCount;
-        TryBuyHoveredPart();
-    }
-
-    private static void TryBuyHoveredPart()
+    public static void AutoBuyMissingPartBeforeMount(object __instance)
     {
         try
         {
-            string? rawPartId = GetHoveredPartId(hoveredPartScript!);
-            if (string.IsNullOrWhiteSpace(rawPartId))
+            object? inventory = GetInventory();
+            if (inventory == null)
+            {
+                LogQuickBuyFailure("QuickShop could not resolve Inventory.");
+                return;
+            }
+
+            string? resolvedPartId = ResolvePurchasablePartId(__instance);
+            if (string.IsNullOrWhiteSpace(resolvedPartId))
             {
                 return;
             }
 
-            string partId = rawPartId!;
-            if (!CanBuyPart(partId))
+            string partId = resolvedPartId!;
+            if (InventoryHasPart(inventory, partId))
             {
                 return;
             }
@@ -111,11 +70,10 @@ internal static class QuickShopPatchInstaller
                 return;
             }
 
-            object? inventory = GetInventory();
             object? item = CreateItem(partId);
-            if (inventory == null || item == null)
+            if (item == null)
             {
-                LogQuickBuyFailure("QuickShop could not resolve Inventory or Item.");
+                LogQuickBuyFailure("QuickShop could not create Item.");
                 return;
             }
 
@@ -123,25 +81,41 @@ internal static class QuickShopPatchInstaller
                 ?.Invoke(inventory, new[] { item, true });
 
             AddPlayerMoney(-price);
-            Plugin.ModLog.LogInfo($"QuickShop bought one {partId} for {price}.");
+            Plugin.ModLog.LogInfo($"QuickShop bought one missing mount part {partId} for {price}.");
         }
         catch (Exception ex)
         {
-            LogQuickBuyFailure($"QuickShop repair-screen buy failed: {ex.GetType().Name}: {ex.Message}");
+            LogQuickBuyFailure($"QuickShop auto-buy before mount failed: {ex.GetType().Name}: {ex.Message}");
         }
     }
 
-    private static string? GetHoveredPartId(object partScript)
+    private static string? ResolvePurchasablePartId(object partScript)
     {
-        MethodInfo? getIdWithTuned = AccessTools.Method(partScript.GetType(), "GetIDWithTuned");
-        string? tunedId = getIdWithTuned?.Invoke(partScript, Array.Empty<object>()) as string;
-        if (!string.IsNullOrWhiteSpace(tunedId))
+        foreach (string methodName in new[] { "GetIDWithTuned", "GetID" })
         {
-            return tunedId;
+            string? rawPartId = AccessTools.Method(partScript.GetType(), methodName)
+                ?.Invoke(partScript, Array.Empty<object>()) as string;
+
+            if (string.IsNullOrWhiteSpace(rawPartId))
+            {
+                continue;
+            }
+
+            string partId = rawPartId!;
+            if (CanBuyPart(partId) && GetPartProperty(partId) != null)
+            {
+                return partId;
+            }
         }
 
-        MethodInfo? getId = AccessTools.Method(partScript.GetType(), "GetID");
-        return getId?.Invoke(partScript, Array.Empty<object>()) as string;
+        return null;
+    }
+
+    private static bool InventoryHasPart(object inventory, string partId)
+    {
+        object? existing = AccessTools.Method(inventory.GetType(), "GetItem", new[] { typeof(string) })
+            ?.Invoke(inventory, new object[] { partId });
+        return existing != null;
     }
 
     private static bool CanBuyPart(string partId)
