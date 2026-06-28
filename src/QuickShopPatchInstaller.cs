@@ -1,139 +1,211 @@
 using System;
 using System.Reflection;
 using HarmonyLib;
+using Il2CppInterop.Runtime;
 using UnityEngine;
 
 namespace NoRubberBushingWear;
 
 internal static class QuickShopPatchInstaller
 {
-    private const string ShopItemTypeName = "CMS.UI.Logic.Shop.ShopItem";
-    private const string PartsShopPageTypeName = "CMS.UI.Logic.Shop.PartsShopPage";
-    private const string ShopBuyWindowTypeName = "CMS.UI.Windows.ShopBuyWindow";
+    private const string PartScriptTypeName = "PartScript";
+    private const string GameInventoryTypeName = "GameInventory";
+    private const string GameManagerTypeName = "GameManager";
+    private const string GlobalDataTypeName = "GlobalData";
+    private const string InventoryTypeName = "Inventory";
+    private const string ItemTypeName = "Item";
 
-    private static object? hoveredShopItem;
-    private static MethodInfo? submitItemMethod;
-    private static MethodInfo? buyItemMethod;
-    private static bool quickBuyPending;
+    private static object? hoveredPartScript;
+    private static int lastHandledFrame = -1;
     private static bool loggedQuickBuyFailure;
 
     public static int Install(Harmony harmony)
     {
         int count = 0;
 
-        Type? shopItemType = AccessTools.TypeByName(ShopItemTypeName);
-        Type? partsShopPageType = AccessTools.TypeByName(PartsShopPageTypeName);
-        Type? shopBuyWindowType = AccessTools.TypeByName(ShopBuyWindowTypeName);
+        Type? partScriptType = AccessTools.TypeByName(PartScriptTypeName);
 
         count += PatchIfFound(
             harmony,
-            AccessTools.Method(shopItemType, "OnPointerEnter"),
-            postfix: nameof(RememberHoveredShopItem));
+            AccessTools.Method(partScriptType, "SetMouseOver", new[] { typeof(bool) }),
+            postfix: nameof(TrackHoveredPart));
 
         count += PatchIfFound(
             harmony,
-            AccessTools.Method(shopItemType, "OnPointerExit"),
-            postfix: nameof(ClearHoveredShopItem));
+            AccessTools.Method(partScriptType, "OnDisable"),
+            postfix: nameof(ClearHoveredPart));
 
         count += PatchIfFound(
             harmony,
-            AccessTools.Method(shopItemType, "Deselect"),
-            postfix: nameof(ClearHoveredShopItem));
+            AccessTools.Method(partScriptType, "OnDestroy"),
+            postfix: nameof(ClearHoveredPart));
 
         count += PatchIfFound(
             harmony,
-            AccessTools.Method(partsShopPageType, "Close"),
-            postfix: nameof(ClearAnyHoveredShopItem));
-
-        count += PatchIfFound(
-            harmony,
-            AccessTools.Method(partsShopPageType, "HandleInput"),
-            postfix: nameof(HandlePartsShopInput));
-
-        MethodInfo? prepareForItem = AccessTools.Method(shopBuyWindowType, "PrepareForItem");
-        count += PatchIfFound(harmony, prepareForItem, postfix: nameof(BuyPreparedItem));
-
-        submitItemMethod = AccessTools.Method(partsShopPageType, "SubmitItem");
-        buyItemMethod = AccessTools.Method(shopBuyWindowType, "BuyItem");
+            AccessTools.Method(partScriptType, "Update"),
+            postfix: nameof(HandleRepairQuickShopInput));
 
         if (count > 0)
         {
-            Plugin.ModLog.LogInfo($"QuickShop enabled. Press B while hovering a part in the parts shop to buy one immediately.");
+            Plugin.ModLog.LogInfo("QuickShop enabled. Press B while hovering a repair-screen part to buy one replacement.");
         }
         else
         {
-            Plugin.ModLog.LogWarning("QuickShop hook points were not found.");
+            Plugin.ModLog.LogWarning("QuickShop repair-screen hook points were not found.");
         }
 
         return count;
     }
 
-    public static void RememberHoveredShopItem(object __instance)
+    public static void TrackHoveredPart(object __instance, bool b)
     {
-        hoveredShopItem = __instance;
-    }
-
-    public static void ClearHoveredShopItem(object __instance)
-    {
-        if (ReferenceEquals(hoveredShopItem, __instance))
+        if (b)
         {
-            hoveredShopItem = null;
+            hoveredPartScript = __instance;
+        }
+        else if (ReferenceEquals(hoveredPartScript, __instance))
+        {
+            hoveredPartScript = null;
         }
     }
 
-    public static void ClearAnyHoveredShopItem()
+    public static void ClearHoveredPart(object __instance)
     {
-        hoveredShopItem = null;
+        if (ReferenceEquals(hoveredPartScript, __instance))
+        {
+            hoveredPartScript = null;
+        }
     }
 
-    public static void HandlePartsShopInput(object __instance)
+    public static void HandleRepairQuickShopInput()
     {
-        if (!Input.GetKeyDown(KeyCode.B) || hoveredShopItem == null || IsInputFieldFocused(__instance))
+        if (hoveredPartScript == null || !Input.GetKeyDown(KeyCode.B) || lastHandledFrame == Time.frameCount)
         {
             return;
         }
 
+        lastHandledFrame = Time.frameCount;
+        TryBuyHoveredPart();
+    }
+
+    private static void TryBuyHoveredPart()
+    {
         try
         {
-            quickBuyPending = true;
-            submitItemMethod ??= AccessTools.Method(__instance.GetType(), "SubmitItem");
-            submitItemMethod?.Invoke(__instance, new[] { hoveredShopItem });
-
-            if (submitItemMethod == null)
+            string? rawPartId = GetHoveredPartId(hoveredPartScript!);
+            if (string.IsNullOrWhiteSpace(rawPartId))
             {
-                LogQuickBuyFailure("PartsShopPage.SubmitItem could not be resolved.");
+                return;
             }
+
+            string partId = rawPartId!;
+            if (!CanBuyPart(partId))
+            {
+                return;
+            }
+
+            object? partProperty = GetPartProperty(partId);
+            int price = GetIntProperty(partProperty, "Price");
+            if (price < 0 || GetPlayerMoney() < price)
+            {
+                return;
+            }
+
+            object? inventory = GetInventory();
+            object? item = CreateItem(partId);
+            if (inventory == null || item == null)
+            {
+                LogQuickBuyFailure("QuickShop could not resolve Inventory or Item.");
+                return;
+            }
+
+            AccessTools.Method(inventory.GetType(), "Add", new[] { item.GetType(), typeof(bool) })
+                ?.Invoke(inventory, new[] { item, true });
+
+            AddPlayerMoney(-price);
+            Plugin.ModLog.LogInfo($"QuickShop bought one {partId} for {price}.");
         }
         catch (Exception ex)
         {
-            quickBuyPending = false;
-            LogQuickBuyFailure($"QuickShop submit failed: {ex.GetType().Name}: {ex.Message}");
+            LogQuickBuyFailure($"QuickShop repair-screen buy failed: {ex.GetType().Name}: {ex.Message}");
         }
     }
 
-    public static void BuyPreparedItem(object __instance)
+    private static string? GetHoveredPartId(object partScript)
     {
-        if (!quickBuyPending)
+        MethodInfo? getIdWithTuned = AccessTools.Method(partScript.GetType(), "GetIDWithTuned");
+        string? tunedId = getIdWithTuned?.Invoke(partScript, Array.Empty<object>()) as string;
+        if (!string.IsNullOrWhiteSpace(tunedId))
         {
-            return;
+            return tunedId;
         }
 
-        quickBuyPending = false;
+        MethodInfo? getId = AccessTools.Method(partScript.GetType(), "GetID");
+        return getId?.Invoke(partScript, Array.Empty<object>()) as string;
+    }
 
-        try
-        {
-            buyItemMethod ??= AccessTools.Method(__instance.GetType(), "BuyItem");
-            buyItemMethod?.Invoke(__instance, Array.Empty<object>());
+    private static bool CanBuyPart(string partId)
+    {
+        Type? gameInventoryType = AccessTools.TypeByName(GameInventoryTypeName);
+        MethodInfo? canAddToShopList = AccessTools.Method(gameInventoryType, "CanAddToShopList", new[] { typeof(string), typeof(bool) });
+        return canAddToShopList == null || canAddToShopList.Invoke(null, new object[] { partId, true }) is true;
+    }
 
-            if (buyItemMethod == null)
-            {
-                LogQuickBuyFailure("ShopBuyWindow.BuyItem could not be resolved.");
-            }
-        }
-        catch (Exception ex)
+    private static object? GetPartProperty(string partId)
+    {
+        object? gameInventory = AccessTools.PropertyGetter(AccessTools.TypeByName(GameInventoryTypeName), "Instance")
+            ?.Invoke(null, Array.Empty<object>());
+
+        return gameInventory == null
+            ? null
+            : AccessTools.Method(gameInventory.GetType(), "GetItemPropertyCached", new[] { typeof(string) })
+                ?.Invoke(gameInventory, new object[] { partId });
+    }
+
+    private static object? GetInventory()
+    {
+        Type? gameManagerType = AccessTools.TypeByName(GameManagerTypeName);
+        UnityEngine.Object? gameManager = gameManagerType == null ? null : UnityEngine.Object.FindObjectOfType(Il2CppType.From(gameManagerType));
+        object? inventory = gameManager == null
+            ? null
+            : AccessTools.PropertyGetter(gameManagerType, "Inventory")?.Invoke(gameManager, Array.Empty<object>());
+
+        if (inventory != null)
         {
-            LogQuickBuyFailure($"QuickShop buy failed: {ex.GetType().Name}: {ex.Message}");
+            return inventory;
         }
+
+        Type? inventoryType = AccessTools.TypeByName(InventoryTypeName);
+        return inventoryType == null ? null : UnityEngine.Object.FindObjectOfType(Il2CppType.From(inventoryType));
+    }
+
+    private static object? CreateItem(string partId)
+    {
+        Type? itemType = AccessTools.TypeByName(ItemTypeName);
+        return itemType == null ? null : Activator.CreateInstance(itemType, partId);
+    }
+
+    private static int GetPlayerMoney()
+    {
+        return AccessTools.PropertyGetter(AccessTools.TypeByName(GlobalDataTypeName), "PlayerMoney")
+            ?.Invoke(null, Array.Empty<object>()) as int? ?? 0;
+    }
+
+    private static void AddPlayerMoney(int amount)
+    {
+        AccessTools.Method(AccessTools.TypeByName(GlobalDataTypeName), "AddPlayerMoney", new[] { typeof(int) })
+            ?.Invoke(null, new object[] { amount });
+    }
+
+    private static int GetIntProperty(object? instance, string propertyName)
+    {
+        if (instance == null)
+        {
+            return -1;
+        }
+
+        object? value = AccessTools.PropertyGetter(instance.GetType(), propertyName)?.Invoke(instance, Array.Empty<object>());
+        return value is int result ? result : -1;
     }
 
     private static int PatchIfFound(Harmony harmony, MethodBase? target, string? prefix = null, string? postfix = null)
@@ -155,19 +227,6 @@ internal static class QuickShopPatchInstaller
         {
             Plugin.ModLog.LogWarning($"Failed to patch {Describe(target)}: {ex.GetType().Name}: {ex.Message}");
             return 0;
-        }
-    }
-
-    private static bool IsInputFieldFocused(object page)
-    {
-        try
-        {
-            PropertyInfo? property = AccessTools.Property(page.GetType(), "inputFieldHasFocus");
-            return property != null && property.GetValue(page) is bool focused && focused;
-        }
-        catch
-        {
-            return false;
         }
     }
 

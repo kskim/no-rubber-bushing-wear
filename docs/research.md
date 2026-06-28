@@ -39,20 +39,22 @@ The implementation therefore patches condition/fault/damage candidates in `Assem
 
 ## QuickShop Hook Points
 
-The generated IL2CPP interop metadata exposes the parts shop UI in `Assembly-CSharp-firstpass.dll`.
+The generated IL2CPP interop metadata exposes repair-screen part hover through `PartScript`.
 
 Relevant symbols:
 
-- `CMS.UI.Logic.Shop.ShopItem.OnPointerEnter`
-- `CMS.UI.Logic.Shop.ShopItem.OnPointerExit`
-- `CMS.UI.Logic.Shop.ShopItem.Deselect`
-- `CMS.UI.Logic.Shop.PartsShopPage.Close`
-- `CMS.UI.Logic.Shop.PartsShopPage.HandleInput`
-- `CMS.UI.Logic.Shop.PartsShopPage.SubmitItem`
-- `CMS.UI.Windows.ShopBuyWindow.PrepareForItem`
-- `CMS.UI.Windows.ShopBuyWindow.BuyItem`
+- `PartScript.SetMouseOver(bool)`
+- `PartScript.GetIDWithTuned`
+- `PartScript.GetID`
+- `PartScript.Update`
+- `GameInventory.Instance`
+- `GameInventory.GetItemPropertyCached`
+- `PartProperty.Price`
+- `Inventory.Add(Item, bool)`
+- `GlobalData.PlayerMoney`
+- `GlobalData.AddPlayerMoney`
 
-The QuickShop patch remembers the hovered `ShopItem`, detects `B` while `PartsShopPage.HandleInput` is active, submits that item through the vanilla shop page, then buys the item through the vanilla `ShopBuyWindow` path after `PrepareForItem`.
+The QuickShop patch remembers the hovered `PartScript`, detects `B` during part updates, checks the vanilla part price and player money, creates a vanilla `Item`, adds it to `Inventory`, and subtracts the vanilla price.
 
 ## Installed Tooling
 
@@ -80,4 +82,4 @@ No Rubber Bushing Wear 1.1.0
 QuickShop enabled
 ```
 
-Manual QuickShop validation still needs an in-game parts shop check: hover a part in the parts shop and press `B`; one item should be purchased through the vanilla purchase flow.
+Manual QuickShop validation still needs an in-game repair-screen check: hover a vehicle part and press `B`; one replacement item should be purchased and added to inventory while money decreases by the vanilla price.

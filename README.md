@@ -5,7 +5,7 @@
 A small `Car Mechanic Simulator 2021` BepInEx plugin with two focused quality-of-life changes:
 
 - `Rubber Bushing` and `Small Rubber Bushing` never count as faulty.
-- In the parts shop, hover a part and press `B` to buy one immediately.
+- On the repair screen, hover a car part and press `B` to buy one replacement immediately.
 
 The main goal is to remove repetitive diagnostic friction while leaving normal repair, damage, inventory, and save behavior intact.
 
@@ -31,12 +31,11 @@ tulejaMala_1 = Small Rubber Bushing
 
 ### QuickShop
 
-- Open the in-game parts shop.
-- Hover a shop part with the mouse.
+- On the repair or assembly screen, hover a car part with the mouse.
 - Press `B`.
-- The mod submits the hovered item through the vanilla shop flow and immediately buys one item.
+- The mod buys one replacement part and adds it to your inventory.
 
-QuickShop intentionally uses the game's existing shop purchase logic. It does not create items manually, bypass money checks, or alter inventory data directly.
+QuickShop uses vanilla game data for part IDs, prices, money, and inventory items. It does not bypass money checks.
 
 ## How It Works
 
@@ -46,11 +45,12 @@ For rubber bushings, the plugin patches the generated interop condition accessor
 
 For QuickShop, the plugin patches:
 
-- `CMS.UI.Logic.Shop.ShopItem.OnPointerEnter`
-- `CMS.UI.Logic.Shop.PartsShopPage.HandleInput`
-- `CMS.UI.Windows.ShopBuyWindow.PrepareForItem`
+- `PartScript.SetMouseOver(bool)`
+- `PartScript.Update`
+- `PartScript.OnDisable`
+- `PartScript.OnDestroy`
 
-The patch remembers the hovered shop item, listens for `B` while the parts shop is active, then reuses the vanilla `SubmitItem` and `BuyItem` path.
+The patch remembers the hovered repair-screen `PartScript`, listens for `B`, reads the part ID and price from vanilla data, adds a new `Item` to the vanilla inventory, and subtracts the vanilla price from player money.
 
 ## Requirements
 
@@ -118,14 +118,15 @@ QuickShop enabled
 - Small Rubber Bushings never appear as faulty during diagnostics.
 - Story missions and repair orders can still be completed.
 - Other suspension components can still fail normally.
-- In the parts shop, hovering a part and pressing `B` buys one item.
-- Typing in the parts shop search field is not interrupted by QuickShop.
+- On the repair screen, hovering a car part and pressing `B` buys one replacement item.
+- The player money decreases by the vanilla part price.
+- The purchased item appears in inventory.
 - BepInEx logs show no new errors or warnings from this plugin.
 
 ## Limitations
 
 - This is a runtime Harmony patch, not a save editor.
-- QuickShop currently targets the parts shop UI. It does not yet buy directly from car-assembly hover targets outside the shop.
+- QuickShop targets repair-screen car part hover. It does not add a hotkey inside the parts shop UI.
 - The implementation intentionally avoids changing unrelated systems.
 - Game updates may rename or restructure internal methods, requiring revalidation.
 - No configuration file is provided by design.

@@ -5,7 +5,7 @@
 `Car Mechanic Simulator 2021`용 작은 BepInEx 플러그인입니다. 두 가지 품질 개선 기능을 제공합니다.
 
 - `Rubber Bushing`과 `Small Rubber Bushing`이 고장 부품으로 잡히지 않습니다.
-- 부품 상점에서 부품 위에 마우스를 올리고 `B`를 누르면 해당 부품 1개를 즉시 구매합니다.
+- 수리 화면에서 차량 부품 위에 마우스를 올리고 `B`를 누르면 교체용 부품 1개를 즉시 구매합니다.
 
 목표는 반복적인 진단 스트레스를 줄이면서, 일반 수리, 손상, 인벤토리, 저장 데이터 동작은 그대로 유지하는 것입니다.
 
@@ -31,12 +31,11 @@ tulejaMala_1 = Small Rubber Bushing
 
 ### QuickShop
 
-- 게임 안의 부품 상점을 엽니다.
-- 상점 부품 위에 마우스를 올립니다.
+- 수리 또는 조립 화면에서 차량 부품 위에 마우스를 올립니다.
 - `B` 키를 누릅니다.
-- 모드가 기존 상점 구매 흐름으로 해당 부품 1개를 즉시 구매합니다.
+- 모드가 교체용 부품 1개를 구매해 인벤토리에 추가합니다.
 
-QuickShop은 게임의 기존 구매 로직을 재사용합니다. 아이템을 직접 생성하거나, 돈 체크를 우회하거나, 인벤토리 데이터를 직접 고치지 않습니다.
+QuickShop은 vanilla 부품 ID, 가격, 돈, 인벤토리 아이템 데이터를 사용합니다. 돈 체크를 우회하지 않습니다.
 
 ## 동작 방식
 
@@ -46,11 +45,12 @@ Rubber Bushing 기능은 생성된 interop metadata의 `PartData`, `BodyPartData
 
 QuickShop 기능은 아래 UI 메서드를 패치합니다.
 
-- `CMS.UI.Logic.Shop.ShopItem.OnPointerEnter`
-- `CMS.UI.Logic.Shop.PartsShopPage.HandleInput`
-- `CMS.UI.Windows.ShopBuyWindow.PrepareForItem`
+- `PartScript.SetMouseOver(bool)`
+- `PartScript.Update`
+- `PartScript.OnDisable`
+- `PartScript.OnDestroy`
 
-패치는 마우스를 올린 상점 부품을 기억하고, 부품 상점이 활성화된 동안 `B` 입력을 감지한 뒤 vanilla `SubmitItem`, `BuyItem` 경로를 그대로 사용합니다.
+패치는 수리 화면에서 마우스를 올린 `PartScript`를 기억하고, `B` 입력을 감지한 뒤 vanilla 데이터에서 부품 ID와 가격을 읽어 새 `Item`을 vanilla 인벤토리에 추가하고 부품 가격만큼 돈을 차감합니다.
 
 ## 요구 사항
 
@@ -118,14 +118,15 @@ QuickShop enabled
 - Small Rubber Bushing이 diagnostics에서 faulty로 표시되지 않습니다.
 - story mission과 repair order가 정상적으로 완료됩니다.
 - 다른 suspension 부품은 vanilla처럼 고장날 수 있습니다.
-- 부품 상점에서 부품 위에 마우스를 올리고 `B`를 누르면 1개가 구매됩니다.
-- 부품 상점 검색창에 입력할 때 QuickShop이 방해하지 않습니다.
+- 수리 화면에서 차량 부품 위에 마우스를 올리고 `B`를 누르면 교체용 부품 1개가 구매됩니다.
+- 플레이어 돈이 vanilla 부품 가격만큼 감소합니다.
+- 구매한 부품이 인벤토리에 표시됩니다.
 - BepInEx 로그에 이 플러그인에서 발생한 새 error/warning이 없습니다.
 
 ## 제한 사항
 
 - 이 모드는 저장 파일 편집기가 아니라 런타임 Harmony 패치입니다.
-- QuickShop은 현재 부품 상점 UI를 대상으로 합니다. 아직 차량 조립 화면에서 마우스 오버한 부품을 바로 구매하지는 않습니다.
+- QuickShop은 수리 화면의 차량 부품 hover를 대상으로 합니다. 부품 상점 UI 내부 단축키는 추가하지 않습니다.
 - 관련 없는 시스템은 의도적으로 변경하지 않습니다.
 - 게임 업데이트로 내부 메서드명이나 구조가 바뀌면 재검증이 필요할 수 있습니다.
 - 설정 파일은 의도적으로 제공하지 않습니다.
